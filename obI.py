@@ -187,7 +187,8 @@ class BinanceClient:
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     binance_read = BinanceClient(apiKey=binance_api,apiSecret=binance_secret, testnet=False)
-    binance_read.orderbook_data_manipulation(pair='BTCBUSD')
+    binance_read.orderbook_stats(pair='BTCBUSD')
+    binance_read.recent_trade_stats(symbol='BTCBUSD')
 
 
 
