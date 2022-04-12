@@ -137,8 +137,53 @@ class BinanceClient:
         print('==================================================================================================')
 
 
-def selection_nested_list(list):
-    pass
+   def recent_trade_stats(self, symbol: str):
+        sell_trades_price_list = []
+        sell_trades_qty_list = []
+        buy_trades_price_list = []
+        buy_trades_qty_list = []
+        trades= self.connection.get_recent_trades(symbol=symbol)
+        # {'id': 333420296, 'price': '39659.94000000', 'qty': '0.03831000',
+        # 'quoteQty': '1519.37230140','time': 1649723895180,
+        # 'isBuyerMaker': True, 'isBestMatch': True},
+        for trade in trades:
+            if trade['isBuyerMaker']:
+                price_trade = trade['price']
+                qty_trade = trade['qty']
+                buy_trades_price_list.append(price_trade)
+                buy_trades_qty_list.append(qty_trade)
+            elif trade['isBuyerMaker'] == False:
+                price_trade = trade['price']
+                qty_trade = trade['qty']
+                sell_trades_price_list.append(price_trade)
+                sell_trades_qty_list.append(qty_trade)
+        print('========================================================================')
+        sell_price = pd.Series(sell_trades_price_list).astype('float')
+        sell_qty = pd.Series(sell_trades_qty_list).astype('float')
+        
+        print('MEAN SELL PRICE $: ', sell_price.mean())
+        print('MEAN SELL QTY : ', sell_qty.mean())
+        buy_price = pd.Series(buy_trades_price_list).astype('float')
+        buy_qty = pd.Series(buy_trades_qty_list).astype('float')
+
+        print('MEAN BUY PRICE $: ', buy_price.mean())
+        print('MEAN BUY QTY : ', buy_qty.mean())
+        sum_sell = sell_price.mean() * sell_qty.sum()
+        sum_buy = buy_price.mean() * buy_qty.sum()
+        print('TOTAL SELL VOLUME $: ', sum_sell)
+        print('TOTAL BUY VOLUME $: ', sum_buy)
+        print('------------------------------------------------------------------------')
+        # if sum_buy > sum_sell:
+        #     print("BULLS MARKET")
+        # elif sum_buy < sum_sell:
+        #     print('BEAR MARKET')
+        print('========================================================================')
+        print('RECENT TRADES STATS: SELL')
+        print(sell_price.describe())
+        print(sell_qty.describe())
+        print('RECENT TRADE STATS: BUY')
+        print(buy_price.describe())
+        print(buy_qty.describe())
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     binance_read = BinanceClient(apiKey=binance_api,apiSecret=binance_secret, testnet=False)
