@@ -1,39 +1,54 @@
-import requests
+import datetime
+
 from binance.client import Client
 import pandas as pd
-base_url_kucoin = 'https://api.kucoin.com'
-binance_url_base = ''
-binance_api = ''
-binance_secret = ''
+from binance.exceptions import *
+import time
+import datetime as dt
+
+# binance websocket address
+binance_wss_address = 'wss://stream.binance.com:9443'
 
 
-class BinanceClient:
+class BinanceReadOnlyClient:
     def __init__(self, apiKey: str, apiSecret: str, testnet: bool):
         if testnet:
             self._base_url = "https://testnet.binancefuture.com"
-            self.wss_url =  "wss://stream.binancefuture.com/ws"
+            self.wss_url = "wss://stream.binancefuture.com/ws"
         else:
             self.base_url = "https://api.binance.com"
         self._apiKey = apiKey
         self._apiSecret = apiSecret
-        self.connection = Client(api_key=self._apiKey,api_secret=self._apiSecret)
+        self.connection = Client(api_key=self._apiKey, api_secret=self._apiSecret)
         self.orderbook = dict()
-
         self.logs = []
 
-    def orderbook_data_manipulation(self, pair: str):
+    def API_info_stats(self):
+        # binance.exceptions.BinanceAPIException:
+        try:
+            status = self.connection.get_account()
+            print(status)
+        except BinanceAPIException as e:
+            print(e)
+
+    def orderbook_reformat(self, pair:str):
         pair_price_ask = []
         pair_price_bid = []
         pair_quantity_ask = []
         pair_quantity_bid = []
         expected_volume_ask = []
         expected_volume_bid = []
+        current_time_list = []
+        print("RECIVING ORDERBOOK DATA")
 
         depth = self.connection.get_order_book(symbol=f'{pair}')
+
+        # price = self.connection.
         ask = depth['asks']
         bid = depth['bids']
 
         # mainpulate list to extract $ & qty
+        print('EXTRACTING DATA')
         for row in ask:
             for col in row:
                 for x in row:
@@ -43,6 +58,9 @@ class BinanceClient:
                     pair_quantity_ask.append(quantity)
                     price_qty_vol = float(float(price) * float(quantity))
                     expected_volume_ask.append(price_qty_vol)
+                    now = datetime.datetime.now()
+                    current_time = now.strftime("%H:%M:%S")
+                    current_time_list.append(current_time)
 
         for row in bid:
             for col in row:
@@ -53,68 +71,131 @@ class BinanceClient:
                     pair_quantity_bid.append(quantity)
                     price_qty_vol = float(float(price) * float(quantity))
                     expected_volume_bid.append(price_qty_vol)
-       
-        '''
-        OB STATS PRICE & QUANTITY
-        '''
-        
-        print('--------------------------------------------------------------------------------------------------')
-        mean_ask_price_ser = pd.Series(pair_price_ask).astype('float')
-        median_ask_price_ser = pd.Series(pair_price_ask).astype('float')
-        std_ask_price_ser = pd.Series(pair_price_ask).astype('float')
-        des_ask_price_ser = pd.Series(pair_price_ask).astype('float')
-        ask_price_mean = mean_ask_price_ser.mean()
-        ask_price_med = median_ask_price_ser.median()
-        ask_price_std = std_ask_price_ser.std()
-        ask_price_des = des_ask_price_ser.describe()
-        print("MEAN ASK PRICE", ask_price_mean)
-        print("MEDIAN ASK PRICE", ask_price_med)
-        print('STANDARD DEVIATION', ask_price_std)
-        print("CURRENT ORDERBOOK STATS: $")
-        print(ask_price_des)
-        print('--------------------------------------------------------------------------------------------------')
-        meanpair_quantity_ask_ser = pd.Series(pair_quantity_ask).astype('float')
-        medianpair_quantity_ask_ser = pd.Series(pair_quantity_ask).astype('float')
-        stdpair_quantity_ask_ser = pd.Series(pair_quantity_ask).astype('float')
-        despair_quantity_ask_ser = pd.Series(pair_quantity_ask).astype('float')
-        pair_quantity_ask_mean = meanpair_quantity_ask_ser.mean()
-        pair_quantity_ask_med = medianpair_quantity_ask_ser.median()
-        pair_quantity_ask_std = stdpair_quantity_ask_ser.std()
-        ask_price_des = despair_quantity_ask_ser.describe()
-        print("MEAN ASK QTY",pair_quantity_ask_mean)
-        print("MEDIAN ASK QTY",pair_quantity_ask_med)
-        print('STANDARD DEVIATION',pair_quantity_ask_std)
-        print('CURRENT ORDERBOOK STATS: QTY')
-        print(ask_price_des)
-        print('--------------------------------------------------------------------------------------------------')
-        mean_bid_price_ser = pd.Series(pair_price_bid).astype('float')
+                    now = datetime.datetime.now()
+                    current_time = now.strftime("%H:%M:%S")
+                    current_time_list.append(current_time)
+
+        # now = datetime.datetime.now()
+        # current_time = now.strftime("%H:%M:%S")
+        time_ser = pd.Series(current_time_list)
+        ask_ser = pd.Series(pair_price_ask)
+        quantity_ask_ser = pd.Series(pair_quantity_ask).astype('float')
+        median_ask_price_ser = pd.Series(pair_price_ask)
+        std_ask_price_ser = pd.Series(pair_price_ask)
+        des_ask_price_ser = pd.Series(pair_price_ask)
+
+        bid_ser = pd.Series(pair_price_bid).astype('float')
+        quantity_bid_ser = pd.Series(pair_quantity_bid)
         median_bid_price_ser = pd.Series(pair_price_bid).astype('float')
         std_bid_price_ser = pd.Series(pair_price_bid).astype('float')
         des_bid_price_ser = pd.Series(pair_price_bid).astype('float')
-        bid_price_mean = mean_bid_price_ser.mean()
-        bid_price_med = median_bid_price_ser.median()
-        bid_price_std = std_bid_price_ser.std()
-        bid_price_des = des_bid_price_ser.describe()
+
+        # # EXPECTED VOLUME OF ORDERS PLACED
+        expected_OBVOL_ask = pd.Series(expected_volume_ask)
+        expected_OBVOL_bid = pd.Series(expected_volume_bid)
+
+        dict_data = {'pair_ask':ask_ser, 'pair_bid':bid_ser,'quantity_ask':quantity_ask_ser,
+                     'quantity_bid': quantity_bid_ser, 'expected_volume_ask':expected_OBVOL_ask,
+                     'expected_volume_bid':expected_OBVOL_bid}
+        # df_OB = pd.concat([ask_ser,bid_ser,quantity_ask_ser,quantity_bid_ser,expected_OBVOL_ask,expected_OBVOL_bid],
+        #                   axis=1)
+        df_OB = pd.DataFrame(data=dict_data).round(decimals=2)
+
+        return df_OB
+
+    def orderbook_stats(self, df_OB:pd.DataFrame):
+
+        df_OB = self.orderbook_reformat(pair='BTCUSDT')
+
+        # print(df_OB)
+        '''
+
+        AVR PRICE & QUANTITY
+
+        '''
+        df_OB['pair_ask'] = pd.to_numeric(df_OB['pair_ask'], downcast='float')
+        df_OB['pair_bid'] = pd.to_numeric(df_OB['pair_bid'], downcast='float')
+        df_OB['quantity_ask'] = pd.to_numeric(df_OB['quantity_ask'], downcast='float')
+        df_OB['quantity_bid'] = pd.to_numeric(df_OB['quantity_bid'], downcast='float')
+
+        # avg price ask
+        print('--------------------------------------------------------------------------------------------------')
+        #
+        #
+        ask_price_ser = pd.Series(df_OB['pair_ask'])
+
+        #
+        ask_price_mean = ask_price_ser.mean()
+
+        ask_price_med = ask_price_ser.median()
+        # ask_price_std = std_ask_price_ser.std(ddof=2)
+        ask_price_des = ask_price_ser.describe()
+        #
+        #
+        print('=============================================================================')
+        print("MEAN ASK PRICE", ask_price_mean)
+        print("MEDIAN ASK PRICE", ask_price_med)
+        print('ASK PRICE STATS', ask_price_des)
+        print('=============================================================================')
+       
+        qty_ask_ser = pd.Series(df_OB['quantity_ask'])
+        quantity_ask_mean = qty_ask_ser.mean()
+        pair_quantity_ask_med = qty_ask_ser.median()
+        # pair_quantity_ask_std = stdpair_quantity_ask_ser.std(ddof=2)
+        ask_qty_des = qty_ask_ser.describe()
+        #
+        print("MEAN ASK QTY", quantity_ask_mean)
+        print("MEDIAN ASK QTY", pair_quantity_ask_med)
+        print("ASK PRICE QTY STATS ", qty_ask_ser)
+        print('=============================================================================')
+
+        # print('--------------------------------------------------------------------------------------------------')
+        
+        bid_ser = pd.Series(df_OB['pair_bid'])
+        bid_price_mean = bid_ser.mean()
+        bid_price_med = bid_ser.median()
+        # bid_price_std = std_bid_price_ser.std(ddof=2)
+        bid_price_des = bid_ser.describe()
+        print('=============================================================================')
         print("MEAN BID PRICE", bid_price_mean)
         print("MEDIAN BID PRICE", bid_price_med)
-        print('STANDARD DEVIATION', bid_price_std)
-        print("CURRENT ORDERBOOK STATS: $")
-        print(bid_price_des)
-        print('--------------------------------------------------------------------------------------------------')
-        meanpair_quantity_bid_ser = pd.Series(pair_quantity_bid).astype('float')
-        medianpair_quantity_bid_ser = pd.Series(pair_quantity_bid).astype('float')
-        stdpair_quantity_bid_ser = pd.Series(pair_quantity_bid).astype('float')
-        despair_quantity_bid_ser = pd.Series(pair_quantity_bid).astype('float')
-        pair_quantity_bid_mean = meanpair_quantity_bid_ser.mean()
-        pair_quantity_bid_med = medianpair_quantity_bid_ser.median()
-        pair_quantity_bid_std = stdpair_quantity_bid_ser.std()
-        bid_price_des = despair_quantity_bid_ser.describe()
-        print("MEAN BID QTY", pair_quantity_bid_mean)
-        print("MEDIAN BID QTY", pair_quantity_bid_med)
-        print('STANDARD DEVIATION', pair_quantity_bid_std)
-        print('CURRENT ORDERBOOK STATS: QTY')
-        print(bid_price_des)
+        print('BID PRICE STATS', bid_price_des)
+        print('=============================================================================')
+
+        #
+        qty_bid_ser = pd.Series(df_OB['quantity_bid'])
+        quantity_bid_mean = qty_bid_ser.mean()
+        quantity_bid_med = qty_bid_ser.median()
+        # pair_quantity_bid_std = stdpair_quantity_bid_ser.std(ddof=2)
+        bid_qty_des = qty_bid_ser.describe()
+        #
         print('==================================================================================================')
+        print("MEAN BID QTY", quantity_bid_mean)
+        print("MEDIAN BID QTY", quantity_bid_med)
+        print('QTY BID STATS', bid_qty_des)
+        print('==================================================================================================')
+
+
+        """
+            difference
+        """
+        print('DIFFERENCE (ask - bid) mean')
+        diff = ask_price_mean - bid_price_mean
+        print(diff, ' $')
+        print(bid_price_mean+diff)
+        print('QTY DIFFERENCE')
+        # - num below represents ask qty is more
+        print(quantity_bid_mean-quantity_ask_mean)
+
+        print('DIFFERENCE (ask - bid) med')
+        diff_2 = ask_price_med - bid_price_med
+        print(diff_2, ' $')
+        # spread == difference
+        
+        print('=============================================================================')
+        total_vol_ask = df_OB['expected_volume_ask'].sum()
+        total_vol_bid = df_OB['expected_volume_bid'].sum()
+        #
         if total_vol_ask > total_vol_bid:
             print('CURRENT OB BOOKED AT SELLING')
             print('SELLING BOOKED VOLUME: ', total_vol_ask)
@@ -131,70 +212,29 @@ class BinanceClient:
             print('SELLING BOOKED VOLUME: ', total_vol_ask)
             print('==================================================================================================')
 
-        horizontal_df_stack = pd.concat([exp_OBVOL_ask_df,exp_OBVOL_bid_df], axis=1)
-        horizontal_df_stack.dropna()
-        #print(horizontal_df_stack)
-        print('==================================================================================================')
 
+   
+    def price_change_statistics_24h(self, pair):
+        '''
 
-   def recent_trade_stats(self, symbol: str):
-        sell_trades_price_list = []
-        sell_trades_qty_list = []
-        buy_trades_price_list = []
-        buy_trades_qty_list = []
-        trades= self.connection.get_recent_trades(symbol=symbol)
-        # {'id': 333420296, 'price': '39659.94000000', 'qty': '0.03831000',
-        # 'quoteQty': '1519.37230140','time': 1649723895180,
-        # 'isBuyerMaker': True, 'isBestMatch': True},
-        for trade in trades:
-            if trade['isBuyerMaker']:
-                price_trade = trade['price']
-                qty_trade = trade['qty']
-                buy_trades_price_list.append(price_trade)
-                buy_trades_qty_list.append(qty_trade)
-            elif trade['isBuyerMaker'] == False:
-                price_trade = trade['price']
-                qty_trade = trade['qty']
-                sell_trades_price_list.append(price_trade)
-                sell_trades_qty_list.append(qty_trade)
-        print('========================================================================')
-        sell_price = pd.Series(sell_trades_price_list).astype('float')
-        sell_qty = pd.Series(sell_trades_qty_list).astype('float')
-        
-        print('MEAN SELL PRICE $: ', sell_price.mean())
-        print('MEAN SELL QTY : ', sell_qty.mean())
-        buy_price = pd.Series(buy_trades_price_list).astype('float')
-        buy_qty = pd.Series(buy_trades_qty_list).astype('float')
+        A raw trade is strictly defined as 1 taker and 1 maker trading some quantity at a price,
+        but an aggregate trade is defined as 1 taker, n makers, trading the sum of all the individual raw trade
+        quantities at a price
 
-        print('MEAN BUY PRICE $: ', buy_price.mean())
-        print('MEAN BUY QTY : ', buy_qty.mean())
-        sum_sell = sell_price.mean() * sell_qty.sum()
-        sum_buy = buy_price.mean() * buy_qty.sum()
-        print('TOTAL SELL VOLUME $: ', sum_sell)
-        print('TOTAL BUY VOLUME $: ', sum_buy)
-        print('------------------------------------------------------------------------')
-        # if sum_buy > sum_sell:
-        #     print("BULLS MARKET")
-        # elif sum_buy < sum_sell:
-        #     print('BEAR MARKET')
-        print('========================================================================')
-        print('RECENT TRADES STATS: SELL')
-        print(sell_price.describe())
-        print(sell_qty.describe())
-        print('RECENT TRADE STATS: BUY')
-        print(buy_price.describe())
-        print(buy_qty.describe())
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    binance_read = BinanceClient(apiKey=binance_api,apiSecret=binance_secret, testnet=False)
-    binance_read.orderbook_stats(pair='BTCBUSD')
-    binance_read.recent_trade_stats(symbol='BTCBUSD')
-
-
-
-
-
-
-    # print(df)
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+        '''
+        arg_trades = self.connection.get_aggregate_trades(symbol=pair)
+        # print(arg_trades)
+        # [{'a': 1152762223, 'p': '39675.91000000', 'q': '0.00052000', 'f': 1339896619, 'l': 1339896620,
+        #   'T': 1651163416409, 'm': True, 'M': True},
+        #  {'a': 1152762224, 'p': '39675.91000000', 'q': '0.00001000', 'f': 1339896621, 'l': 1339896621,
+        #   'T': 1651163416461, 'm': True, 'M': True},
+        #  {'a': 1152762225, 'p': '39675.90000000', 'q': '0.00260000', 'f': 1339896622, 'l': 1339896622,
+        #   'T': 1651163416461, 'm': True, 'M': True},
+        x = arg_trades[0]
+        # print(x)
+        col = ['ask', 'price', 'qty', 'timestamp', 'maker?', 'best_price?']
+        arg_df = pd.DataFrame(data=arg_trades)
+        # print(arg_df['f'])
+        arg_df.drop(labels=['f'], axis=1, inplace=True)
+        arg_df.drop(labels=['l'], axis=1, inplace=True)
+        print(arg_df)
