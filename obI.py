@@ -1,5 +1,4 @@
 import datetime
-
 from binance.client import Client
 import pandas as pd
 from binance.exceptions import *
@@ -21,6 +20,7 @@ class BinanceReadOnlyClient:
         self._apiSecret = apiSecret
         self.connection = Client(api_key=self._apiKey, api_secret=self._apiSecret)
         self.orderbook = dict()
+        self.argtrades = dict()
         self.logs = []
 
     def API_info_stats(self):
@@ -30,6 +30,20 @@ class BinanceReadOnlyClient:
             print(status)
         except BinanceAPIException as e:
             print(e)
+
+    def get_realTime_price(self, symbol:str, interval:str):
+        data = self.connection.get_klines(symbol=symbol, interval=interval)
+        print(data)
+        open = data[1]
+        high = data[2]
+        low = data[3]
+        close = data[4]
+        volume = data[5]
+        num_trades = data[8]
+        buyer_vol = data[9]
+        seller_vol = data[10]
+        print(volume)
+
 
     def orderbook_reformat(self, pair:str):
         pair_price_ask = []
@@ -103,9 +117,9 @@ class BinanceReadOnlyClient:
 
         return df_OB
 
-    def orderbook_stats(self, df_OB:pd.DataFrame):
+    def orderbook_stats(self, pair: str):
 
-        df_OB = self.orderbook_reformat(pair='BTCUSDT')
+        df_OB = self.orderbook_reformat(pair=f'{pair}')
 
         # print(df_OB)
         '''
@@ -137,7 +151,12 @@ class BinanceReadOnlyClient:
         print("MEDIAN ASK PRICE", ask_price_med)
         print('ASK PRICE STATS', ask_price_des)
         print('=============================================================================')
-       
+        # print('STANDARD DEVIATION', ask_price_std)
+        # print("CURRENT ORDERBOOK STATS: $")
+        #
+        # # print(ask_price_des)
+        # print('--------------------------------------------------------------------------------------------------')
+        #
         qty_ask_ser = pd.Series(df_OB['quantity_ask'])
         quantity_ask_mean = qty_ask_ser.mean()
         pair_quantity_ask_med = qty_ask_ser.median()
@@ -146,11 +165,14 @@ class BinanceReadOnlyClient:
         #
         print("MEAN ASK QTY", quantity_ask_mean)
         print("MEDIAN ASK QTY", pair_quantity_ask_med)
-        print("ASK PRICE QTY STATS ", qty_ask_ser)
+        print("ASK PRICE QTY STATS ", ask_qty_des)
         print('=============================================================================')
 
+        #
         # print('--------------------------------------------------------------------------------------------------')
-        
+        #
+
+        #
         bid_ser = pd.Series(df_OB['pair_bid'])
         bid_price_mean = bid_ser.mean()
         bid_price_med = bid_ser.median()
@@ -177,21 +199,22 @@ class BinanceReadOnlyClient:
 
 
         """
-            difference
+            Difference
         """
+
         print('DIFFERENCE (ask - bid) mean')
         diff = ask_price_mean - bid_price_mean
         print(diff, ' $')
         print(bid_price_mean+diff)
         print('QTY DIFFERENCE')
-        # - num below represents ask qty is more
         print(quantity_bid_mean-quantity_ask_mean)
 
         print('DIFFERENCE (ask - bid) med')
         diff_2 = ask_price_med - bid_price_med
         print(diff_2, ' $')
         # spread == difference
-        
+        # more spread meaning low liquidity; slow time for price action
+        # less spread meaning higher liquidity; faster price action
         print('=============================================================================')
         total_vol_ask = df_OB['expected_volume_ask'].sum()
         total_vol_bid = df_OB['expected_volume_bid'].sum()
@@ -214,27 +237,3 @@ class BinanceReadOnlyClient:
 
 
    
-    def price_change_statistics_24h(self, pair):
-        '''
-
-        A raw trade is strictly defined as 1 taker and 1 maker trading some quantity at a price,
-        but an aggregate trade is defined as 1 taker, n makers, trading the sum of all the individual raw trade
-        quantities at a price
-
-        '''
-        arg_trades = self.connection.get_aggregate_trades(symbol=pair)
-        # print(arg_trades)
-        # [{'a': 1152762223, 'p': '39675.91000000', 'q': '0.00052000', 'f': 1339896619, 'l': 1339896620,
-        #   'T': 1651163416409, 'm': True, 'M': True},
-        #  {'a': 1152762224, 'p': '39675.91000000', 'q': '0.00001000', 'f': 1339896621, 'l': 1339896621,
-        #   'T': 1651163416461, 'm': True, 'M': True},
-        #  {'a': 1152762225, 'p': '39675.90000000', 'q': '0.00260000', 'f': 1339896622, 'l': 1339896622,
-        #   'T': 1651163416461, 'm': True, 'M': True},
-        x = arg_trades[0]
-        # print(x)
-        col = ['ask', 'price', 'qty', 'timestamp', 'maker?', 'best_price?']
-        arg_df = pd.DataFrame(data=arg_trades)
-        # print(arg_df['f'])
-        arg_df.drop(labels=['f'], axis=1, inplace=True)
-        arg_df.drop(labels=['l'], axis=1, inplace=True)
-        print(arg_df)
